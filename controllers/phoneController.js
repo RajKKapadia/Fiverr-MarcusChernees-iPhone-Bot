@@ -81,7 +81,7 @@ const handleUserProvideProductPhone = async (req) => {
 };
 
 const handleUserAskingAboutColor = (req) => {
-    return formatDialogflowResponse('The color functionality will not work because of the Spanish language at this point.');
+    return formatDialogflowResponse('The color functionality will not work because of the Spanish language at this point.', []);
 };
 
 const handleUserAskingAboutCondition = (req) => {
@@ -128,7 +128,6 @@ const handleUserProvidesPhoneBuyOption = (req) => {
 const handleUserConfirmsPhoneBuy = (req) => {
     let parameters = getDialogflowParameters(req, 'phone_vars')
     if (Object.keys(parameters).length > 0) {
-        console.log(parameters);
         responseData = formatDialogflowResponse(`You order is confirmed, we will contact you very soon.`, []);
         return responseData
     } else {
