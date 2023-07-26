@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 const { formatDialogflowResponse } = require('../helper/untils');
-const { handleUserProvideProductPhone, handleUserAskingAboutColor, 
+const { handleUserProvideProductPhone, handleUserAskingAboutAlternatives, 
   handleUserAskingAboutCondition, handleUserProvidesPhoneBuyOption, handleUserConfirmsPhoneBuy } = require('../controllers/phoneController');
 
 router.post('/webhook', async (req, res) => {
@@ -10,8 +10,8 @@ router.post('/webhook', async (req, res) => {
   let responseData = {};
   if (action === 'userProvideProductPhone') {
     responseData = await handleUserProvideProductPhone(req);
-  } else if (action === 'userAskingAboutColor') {
-    responseData = handleUserAskingAboutColor(req);
+  } else if (action === 'userAskingAboutAlternatives') {
+    responseData = await handleUserAskingAboutAlternatives(req);
   } else if (action === 'userAskingAboutCondition') {
     responseData = handleUserAskingAboutCondition(req);
   } else if (action === 'userProvidesPhoneBuyOption') {

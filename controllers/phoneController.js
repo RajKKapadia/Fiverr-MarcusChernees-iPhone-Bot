@@ -2,6 +2,52 @@ const { formatDialogflowResponse, getDialogflowParameters } = require('../helper
 const { ERROR_MESSAGE } = require('../helper/constant');
 const { searchProducts } = require('../helper/airtableAPIs');
 
+const handleAirtableCall = async (phoneData, session) => {
+    let responseData = {};
+    // make airtable call
+    let response = {};
+    if (phoneData.variant === '') {
+        response = await searchProducts(`${phoneData.product} ${phoneData.model}`, phoneData.storage, phoneData.type, '');
+    } else {
+        response = await searchProducts(`${phoneData.product} ${phoneData.model} ${phoneData.variant}`, phoneData.storage, phoneData.type, '');
+    }
+    if (response.status == 1) {
+        let records = response.records;
+        let outString = 'We have the following phones avaialble with us...\n';
+        for (let index = 0; index < records.length; index++) {
+            const element = records[index];
+            if (index == records.length - 1) {
+                outString += `(${index + 1}) ${element.fields['nombre_completo_link_formatted']}.\n`
+            } else {
+                outString += `(${index + 1}) ${element.fields['nombre_completo_link_formatted']}\n`
+            }
+        }
+        outString += 'You can reply with the option number from above to move forward the purchase.';
+        let oc = [
+            {
+                name: `${session}/contexts/phone_vars`,
+                lifespanCount: 50,
+                parameters: {
+                    phoneData: phoneData,
+                    records: records
+                }
+            },
+            {
+                name: `${session}/contexts/await_buy_option`,
+                lifespanCount: 1
+            }
+        ];
+        responseData = formatDialogflowResponse(outString, oc);
+        return responseData;
+    } else {
+        responseData = formatDialogflowResponse(
+            `We don't have ${phoneData.product} ${phoneData.model} ${phoneData.variant} in ${phoneData.storage} in ${phoneData.type} condition, Is there anything else I can help you with?`,
+            []
+        );
+        return responseData;
+    }
+};
+
 const handleUserProvideProductPhone = async (req) => {
     let parameters = getDialogflowParameters(req, 'phone_vars');
     let session = req.body.session;
@@ -32,46 +78,55 @@ const handleUserProvideProductPhone = async (req) => {
         } else {
             phoneData.variant = '';
         }
-        // make airtable call
-        let response = {};
-        if (phoneData.variant === '') {
-            response = await searchProducts(`${phoneData.product} ${phoneData.model}`, phoneData.storage, phoneData.type, '');
-        } else {
-            response = await searchProducts(`${phoneData.product} ${phoneData.model} ${phoneData.variant}`, phoneData.storage, phoneData.type, '');
-        }
-        if (response.status == 1) {
-            let records = response.records;
-            let outString = 'We have the following phones avaialble with us...\n';
-            for (let index = 0; index < records.length; index++) {
-                const element = records[index];
-                if (index == records.length - 1) {
-                    outString += `(${index + 1}) ${element.fields['nombre_completo_link_formatted']}.\n`
-                } else {
-                    outString += `(${index + 1}) ${element.fields['nombre_completo_link_formatted']}\n`
-                }
+        responseData = await handleAirtableCall(phoneData, session);
+        return responseData;
+    } else {
+        responseData = formatDialogflowResponse(ERROR_MESSAGE, []);
+        return responseData;
+    }
+};
+
+const handleUserAskingAboutAlternatives = async (req) => {
+    let parameters = getDialogflowParameters(req, 'phone_vars');
+    let session = req.body.session;
+    let responseData = {};
+    if (Object.keys(parameters).length > 0) {
+        let color = undefined;
+        if (parameters.hasOwnProperty('color')) {
+            if (parameters.color !== '') {
+                color = parameters.color;
             }
-            outString += 'You can reply with the option number from above to move forward the purchase.';
-            let oc = [
-                {
-                    name: `${session}/contexts/phone_vars`,
-                    lifespanCount: 50,
-                    parameters: {
-                        phoneData: phoneData,
-                        records: records
-                    }
-                },
-                {
-                    name: `${session}/contexts/await_buy_option`,
-                    lifespanCount: 1
-                }
-            ];
-            responseData = formatDialogflowResponse(outString, oc);
+        }
+        if (color !== undefined) {
+            responseData = formatDialogflowResponse('The color functionality will not work because of the Spanish language at this point.', []);
+            return responseData;
+        }
+        let storage = undefined;
+        let type = undefined;
+        if (parameters.hasOwnProperty('storage')) {
+            if (Object.keys(parameters.storage).length > 0) {
+                storage = `${parameters.storage.number} GB`;
+            }
+        }
+        if (parameters.hasOwnProperty('type')) {
+            if (parameters.type !== '') {
+                type = parameters.type;
+            }
+        }
+        if (parameters.hasOwnProperty('phoneData')) {
+            let phoneData = parameters.phoneData;
+            if (storage !== undefined) {
+                phoneData.storage = storage;
+            }
+            if (type !== undefined) {
+                phoneData.type = type;
+            }
+            console.log(storage, type);
+            console.log(phoneData);
+            responseData = await handleAirtableCall(phoneData, session);
             return responseData;
         } else {
-            responseData = formatDialogflowResponse(
-                `We don't have ${phoneData.product} ${phoneData.model} ${phoneData.variant} in ${phoneData.storage}, Is there anything else I can help you with?`,
-                []
-            );
+            responseData = formatDialogflowResponse(ERROR_MESSAGE, []);
             return responseData;
         }
     } else {
@@ -80,16 +135,12 @@ const handleUserProvideProductPhone = async (req) => {
     }
 };
 
-const handleUserAskingAboutColor = (req) => {
-    return formatDialogflowResponse('The color functionality will not work because of the Spanish language at this point.', []);
-};
-
 const handleUserAskingAboutCondition = (req) => {
     let parameters = getDialogflowParameters(req, 'phone_vars');
     if (Object.keys(parameters).length > 0) {
         let selectedOption = parameters.selectedOption
-        let record = parameters.records[selectedOption-1];
-        let outString = `The phone condition is ${record.fields['Condition']}, warranty info is ${record.fields['warranty_info']}, battery info is ${record.fields['bateria_automated']} and aesthetic is ${record.fields['estetico']}.`;
+        let record = parameters.records[selectedOption - 1];
+        let outString = `The phone condition is ${record.fields['Condition']}, warranty info is ${record.fields['warranty_info']}, battery info is ${record.fields['bateria_automated']}, battery percentage is ${record.fields['bateria%_cuando_llego']} and aesthetic is ${record.fields['estetico']}.`;
         responseData = formatDialogflowResponse(outString, []);
         return responseData
     } else {
@@ -103,7 +154,7 @@ const handleUserProvidesPhoneBuyOption = (req) => {
     let session = req.body.session;
     if (Object.keys(parameters).length > 0) {
         let option = parameters.option;
-        let record = parameters.records[option-1];
+        let record = parameters.records[option - 1];
         let oc = [
             {
                 name: `${session}/contexts/await_confirmation`,
@@ -138,7 +189,7 @@ const handleUserConfirmsPhoneBuy = (req) => {
 
 module.exports = {
     handleUserProvideProductPhone,
-    handleUserAskingAboutColor,
+    handleUserAskingAboutAlternatives,
     handleUserAskingAboutCondition,
     handleUserProvidesPhoneBuyOption,
     handleUserConfirmsPhoneBuy
