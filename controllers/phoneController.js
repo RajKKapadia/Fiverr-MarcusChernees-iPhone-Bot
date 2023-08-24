@@ -6,8 +6,19 @@ const handleAirtableCall = async (phoneData, session) => {
     let responseData = {};
     // make airtable call
     let response = {};
-    if (phoneData.variant === '') {
+    if (phoneData.variant === '' && phoneData.model === '') {
+        let oc = [
+            {
+                name: `${session}/contexts/await_phone_model`,
+                lifespanCount: 1
+            }
+        ];
+        responseData = formatDialogflowResponse(`Which specific model are you looking for the ${phoneData.product}? Like iPhone 14, iPhone 14 Pro Max, etc.`, oc);
+        return responseData
+    } else if (phoneData.variant === '') {
         response = await searchProducts(`${phoneData.product} ${phoneData.model}`, phoneData.storage, phoneData.type, '');
+    } else if (phoneData.model === '') {
+        response = await searchProducts(`${phoneData.product} ${phoneData.variant}`, phoneData.storage, phoneData.type, '');
     } else {
         response = await searchProducts(`${phoneData.product} ${phoneData.model} ${phoneData.variant}`, phoneData.storage, phoneData.type, '');
     }
@@ -57,25 +68,17 @@ const handleUserProvideProductPhone = async (req) => {
         let phoneData = {
             product: model.product,
             model: model.number,
-            variant: '',
+            variant: model.variant,
             storage: `${parameters.storage.number} GB`,
             type: parameters.type
         };
+        console.log(phoneData);
         // check model not specified
         if (phoneData.model === undefined) {
-            let oc = [
-                {
-                    name: `${session}/contexts/await_phone_model`,
-                    lifespanCount: 1
-                }
-            ];
-            responseData = formatDialogflowResponse(`Which specific model are you looking for the ${phoneData.product}? Like iPhone 14, iPhone 14 Pro Max, etc.`, oc);
-            return responseData
+            phoneData.model = '';
         }
         // check for the variant
-        if (model.hasOwnProperty('variant')) {
-            phoneData.variant = model.variant;
-        } else {
+        if (phoneData.variant === undefined) {
             phoneData.variant = '';
         }
         responseData = await handleAirtableCall(phoneData, session);
@@ -140,7 +143,12 @@ const handleUserAskingAboutCondition = (req) => {
     if (Object.keys(parameters).length > 0) {
         let selectedOption = parameters.selectedOption
         let record = parameters.records[selectedOption - 1];
-        let outString = `The phone condition is ${record.fields['Condition']}, warranty info is ${record.fields['warranty_info']}, battery info is ${record.fields['bateria_automated']}, battery percentage is ${record.fields['bateria%_cuando_llego']} and aesthetic is ${record.fields['estetico']}.`;
+        let outString = '';
+        if (record.fields['Condition'] === 'Usado') {
+            outString += `The phone condition is ${record.fields['Condition']}, warranty info is ${record.fields['warranty_info']}, battery info is ${record.fields['bateria_automated']}, battery percentage is ${record.fields['bateria%_cuando_llego']} and aesthetic is ${record.fields['estetico']}.`;
+        } else {
+            outString += `The phone condition is ${record.fields['Condition']}`;
+        }
         responseData = formatDialogflowResponse(outString, []);
         return responseData
     } else {
